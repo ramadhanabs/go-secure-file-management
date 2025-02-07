@@ -149,7 +149,7 @@ func (h *FileHandler) GetFileMetadata(c *gin.Context) {
 
 	file, err := h.Repo.GetFileById(parsedFileId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
