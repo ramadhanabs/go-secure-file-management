@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go-secure-file-management/models"
 	"go-secure-file-management/repositories"
+	"go-secure-file-management/utils"
 	"io"
 	"net/http"
 	"os"
@@ -38,6 +40,7 @@ type Metadata struct {
 }
 
 func (h *FileHandler) CreateFile(c *gin.Context) {
+	userId := c.GetUint("userId")
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -119,7 +122,20 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 			os.Remove(chunk)
 		}
 
-		err = h.Repo.CreateFile(finalPath)
+		finalFile, err = os.Open(finalPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed reopening final file: " + err.Error()})
+			return
+		}
+		defer finalFile.Close()
+
+		mimeValue, err := utils.GetMimeType(finalFile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = h.Repo.CreateFile(finalPath, userId, metadata.FileName, metadata.FileSize, mimeValue)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -158,7 +174,35 @@ func (h *FileHandler) GetFileMetadata(c *gin.Context) {
 	})
 }
 
+func (h *FileHandler) GetFiles(c *gin.Context) {
+	baseURL := os.Getenv("BASE_URL")
+	userId := c.GetUint("userId")
+
+	files, err := h.Repo.GetFilesByUserId(userId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	response := make([]models.Files, 0)
+	for _, file := range files {
+		response = append(response, models.Files{
+			ID:        file.ID,
+			UserId:    file.UserId,
+			Filename:  file.Filename,
+			MimeType:  file.MimeType,
+			Size:      file.Size,
+			Path:      fmt.Sprintf("%s/%s", baseURL, file.Path),
+			CreatedAt: file.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": response,
+	})
+}
+
 func (h *FileHandler) DeleteFile(c *gin.Context) {
+	userId := c.GetUint("userId")
 	fileId := c.Param("fileId")
 	if fileId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File ID is required"})
@@ -171,7 +215,7 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 		return
 	}
 
-	err = h.Repo.DeleteFile(parsedFileId)
+	err = h.Repo.DeleteFile(parsedFileId, userId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file"})
 		return

@@ -3,6 +3,7 @@ package routes
 import (
 	"database/sql"
 	"go-secure-file-management/handlers"
+	"go-secure-file-management/middleware"
 
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 func SetupRouter(db *sql.DB) *gin.Engine {
 	router := gin.Default()
+	jwtMiddleware := middleware.JWTAuth()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"}, // Allow only frontend
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
@@ -22,10 +24,16 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	}))
 
 	fileHandler := handlers.NewFileHandler(db)
+	userHandler := handlers.NewUserHandler(db)
 
 	apiGroup := router.Group("/api")
 
+	apiGroup.POST("/login", userHandler.Login)
+	apiGroup.POST("/register", userHandler.Register)
+
 	fileRouter := apiGroup.Group("file")
+	fileRouter.Use(jwtMiddleware)
+	fileRouter.GET("", fileHandler.GetFiles)
 	fileRouter.POST("/upload-chunk", fileHandler.CreateFile)
 	fileRouter.GET("/metadata/:fileId", fileHandler.GetFileMetadata)
 	fileRouter.DELETE("/:fileId", fileHandler.DeleteFile)

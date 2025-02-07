@@ -27,10 +27,22 @@ func Init(dataSourceName string) {
 
 func initSchema() {
 	query := `
+		CREATE TABLE IF NOT EXISTS users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			email TEXT,
+			password TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+
 		CREATE TABLE IF NOT EXISTS files (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER,
 			path TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			filename TEXT,
+			size INTEGER,
+			mime_type TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 		);
 	`
 

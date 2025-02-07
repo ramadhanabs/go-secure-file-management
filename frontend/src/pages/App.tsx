@@ -1,29 +1,33 @@
-import { useMemo, useState } from "react"
-import { Button } from "./components/ui/button"
+import { useEffect, useMemo, useState } from "react"
+import { Button } from "../components/ui/button"
 import { Image, Github, X, Download, Play, Pause, FileText, Trash } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import FileUploader from "./components/ui/file-uploader"
-import { formatFileSize, generateChecksum } from "./utils/utils"
+import FileUploader from "../components/ui/file-uploader"
 import { v4 as uuidv4 } from "uuid"
-
-const BASE_URL = "http://localhost:8080/api/file"
+import { useNavigate } from "react-router"
+import { isTokenValid, formatFileSize, generateChecksum, customFetch } from "@/lib/utils"
 
 function App() {
+  const navigate = useNavigate()
+
   let controller, signal
   const CHUNK_SIZE = 512 * 1000 //500kb
 
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadCount, setUploadCount] = useState(0)
+  const [isSuccess, setIsSuccess] = useState(false)
 
   // file state
   const fullChunks = useMemo(() => {
     if (!file) return 0
 
+    if (file.size / CHUNK_SIZE < 1) return 1
+
     return Math.floor(file.size / CHUNK_SIZE)
   }, [file])
   console.log("🚀 ~ fullChunks ~ fullChunks:", fullChunks)
-  
+
   const remainedChunk = useMemo(() => {
     if (!file) return 0
 
@@ -40,16 +44,16 @@ function App() {
       let localUpdateCount = uploadCount
 
       setIsUploading(true)
-  
+
       controller = new AbortController()
       signal = controller.signal
-  
+
       const fileId = uuidv4()
       let retryCount = 3
 
       if (fullChunks > 0 && file) {
         while (localUpdateCount < fullChunks && retryCount > 0) {
-          console.log("🚀 ~ handleResumeUpload ~ uploadCount:", uploadCount)
+          console.log("🚀 ~ handleResumeUpload ~ localUpdateCount:", localUpdateCount)
           const data = new FormData()
           const offset = CHUNK_SIZE * localUpdateCount
           const limit = CHUNK_SIZE * (localUpdateCount + 1)
@@ -69,21 +73,16 @@ function App() {
           data.append("file", chunkedFile)
           data.append("metadata", JSON.stringify(metadata))
 
-          const response = await fetch(`${BASE_URL}/upload-chunk`, {
+          const response = await customFetch("/api/file/upload-chunk", {
             method: "POST",
             body: data,
             signal,
           })
+          console.log("🚀 ~ handleResumeUpload ~ response:", response)
 
           if (response.status === 201) {
-            const json = await response.json()
-
             setUploadCount(prev => prev + 1)
             localUpdateCount++
-
-            const percentage = (localUpdateCount / fullChunks) * 100
-
-            console.log(json)
           } else if (response.status === 422) {
             retryCount--
           }
@@ -112,18 +111,16 @@ function App() {
           data.append("file", chunkedFile)
           data.append("metadata", JSON.stringify(metadata))
 
-          const response = await fetch(`${BASE_URL}/upload-chunk`, {
+          const response = await customFetch("/api/file/upload-chunk", {
             method: "POST",
             body: data,
           })
 
-          if (response.status === 200) {
-            const json = await response.json()
-            console.log("🚀 ~ handleResumeUpload ~ json:", json)
-            alert("Success upload!")
+          if (response.status === 201) {
+            setIsSuccess(true)
           } else if (response.status === 422) {
             while (retryCount > 0) {
-              const retryResponse = await fetch(`${BASE_URL}/upload-chunk`, {
+              const retryResponse = await customFetch("/api/file/upload-chunk", {
                 method: "POST",
                 body: data,
               })
@@ -151,7 +148,28 @@ function App() {
   const handleCancelUpload = () => {
     setFile(null)
     setIsUploading(false)
+    setUploadCount(0)
+    setIsSuccess(false)
   }
+
+  const fetchData = async () => {
+    try {
+      const response = await customFetch("/api/file")
+      console.log("🚀 ~ fetchData ~ response:", response)
+    } catch (error) {
+      console.log("🚀 ~ fetchData ~ error:", error)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  useEffect(() => {
+    if (!isTokenValid()) {
+      navigate("/auth") // Redirect if token is invalid
+    }
+  }, [navigate])
 
   return (
     <div>
@@ -179,6 +197,7 @@ function App() {
           file={file}
           setFile={file => setFile(file)}
           isUploading={isUploading}
+          isSuccess={isSuccess}
           handleClickUpload={handleClickUpload}
           handleCancelUpload={handleCancelUpload}
         />
@@ -205,7 +224,9 @@ function App() {
                     value={(uploadCount / fullChunks) * 100}
                     aria-label="File upload progress"
                   />
-                  <p className="text-sm text-gray-600">{Math.floor((uploadCount / fullChunks) * 100)}%</p>
+                  <p className="text-sm text-gray-600">
+                    {Math.floor((uploadCount / fullChunks) * 100)}%
+                  </p>
 
                   {isUploading ? (
                     <Button

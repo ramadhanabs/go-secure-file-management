@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useDropzone } from "react-dropzone"
-import { CloudUpload, FileText, UploadCloud } from "lucide-react"
-import { formatFileSize } from "@/utils/utils"
+import { CheckCircle, CloudUpload, FileText, UploadCloud } from "lucide-react"
+import { formatFileSize } from "@/lib/utils"
 import { Button } from "./button"
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
@@ -9,6 +9,7 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 interface FileUploaderProps {
   file: File | null
   isUploading: boolean
+  isSuccess: boolean
   setFile: (file: File | null) => void
   handleClickUpload: () => void
   handleCancelUpload: () => void
@@ -18,6 +19,7 @@ const FileUploader = ({
   file,
   setFile,
   isUploading,
+  isSuccess,
   handleClickUpload,
   handleCancelUpload,
 }: FileUploaderProps) => {
@@ -48,6 +50,19 @@ const FileUploader = ({
   const handleClickCancel = () => {
     handleCancelUpload()
     setPreview(null)
+  }
+
+  if (isSuccess) {
+    return (
+      <div className="border-dashed border-2 p-10 rounded-lg w-full flex flex-col items-center justify-center gap-2">
+        <CheckCircle className="text-green-500" />
+        <p className="text-sm text-gray-700 font-semibold">Success Upload!</p>
+        <Button onClick={handleCancelUpload} variant="secondary">
+          <UploadCloud />
+          Upload another file?
+        </Button>
+      </div>
+    )
   }
 
   if (file) {
