@@ -92,3 +92,15 @@ func ScanFileWithClamav(filePath string) (bool, error) {
 		return false, nil // infected
 	}
 }
+
+func GetUniqueFilePath(basePath string) string {
+	ext := filepath.Ext(basePath)
+	name := basePath[:len(basePath)-len(ext)]
+
+	if _, err := os.Stat(basePath); os.IsNotExist(err) {
+		return basePath // return original path
+	}
+
+	timestampedPath := fmt.Sprintf("%s_%d%s", name, time.Now().Unix(), ext)
+	return timestampedPath
+}
