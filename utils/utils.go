@@ -6,6 +6,8 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -69,4 +71,24 @@ func GetMimeType(file multipart.File) (string, error) {
 	}
 
 	return kind.MIME.Value, nil
+}
+
+func ScanFileWithClamav(filePath string) (bool, error) {
+	absolutePath, err := filepath.Abs(filePath)
+	if err != nil {
+		fmt.Println("Error getting absolute path:", err)
+		return false, err
+	}
+
+	cmd := exec.Command("clamdscan", "--no-summary", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, err
+	}
+
+	if string(output) == "" || string(output) == fmt.Sprintf("%s: OK\n", absolutePath) {
+		return true, nil // clean
+	} else {
+		return false, nil // infected
+	}
 }
