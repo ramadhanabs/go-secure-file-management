@@ -1,5 +1,7 @@
 frontend/node_modules
 frontend/.env
+frontend/dist
 my_db.db
 uploads
 .env
+ssh_private.key
