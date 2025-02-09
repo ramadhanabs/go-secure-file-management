@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { format } from "date-fns"
 import { Button } from "./button"
-import { Image, Download, Trash, Origami } from "lucide-react"
+import { Image, Download, Trash, Origami, FileText } from "lucide-react"
 import { formatFileSize } from "@/lib/utils"
 import { FileList } from "@/pages/App"
 
@@ -62,7 +62,11 @@ const FileItems = ({
         >
           <div className="flex items-center gap-2">
             <div className="p-2 border border-gray-300 rounded-lg w-max h-max">
-              <Image className="text-gray-600" />
+              {item.mime_type.includes("pdf") ? (
+                <FileText className="text-gray-600" />
+              ) : (
+                <Image className="text-gray-600" />
+              )}
             </div>
 
             <div className="flex flex-col gap-1">

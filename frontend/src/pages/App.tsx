@@ -12,7 +12,7 @@ import FileItems from "@/components/ui/file-items"
 import { useToast } from "@/hooks/use-toast"
 
 export type FileList = z.infer<typeof fileSchema>
-const CHUNK_SIZE = 50 * 1000 //500kb
+const CHUNK_SIZE = 500 * 1000 //500kb
 
 function App() {
   const navigate = useNavigate()
@@ -152,7 +152,7 @@ function App() {
       }
     } catch (error) {
       if (error instanceof Error) {
-        console.log("🚀 ~ handleResumeUpload ~ error:", error.name)
+        console.log("🚀 ~ handleResumeUpload ~ error:", error)
         toast({
           variant: "destructive",
           title: "Uh oh! Something went wrong.",
