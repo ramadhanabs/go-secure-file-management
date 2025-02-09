@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-secure-file-management/repositories"
 	"go-secure-file-management/utils"
@@ -50,13 +51,13 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 	userId := c.GetUint("userId")
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithError(http.StatusInternalServerError, errors.New(err.Error()))
 		return
 	}
 
 	openedFile, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.AbortWithError(http.StatusInternalServerError, errors.New(err.Error()))
 		return
 	}
 	defer openedFile.Close()
@@ -65,32 +66,32 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 	metadataJSON := c.Request.FormValue("metadata")
 	err = json.Unmarshal([]byte(metadataJSON), &metadata)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid meta data"})
+		c.AbortWithError(http.StatusInternalServerError, errors.New("invalid meta data"))
 		return
 	}
 
 	expectedChecksum := metadata.CheckSum // handle checksum
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, openedFile); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file content"})
+		c.AbortWithError(http.StatusInternalServerError, errors.New("failed to read file content"))
 		return
 	}
 	computedChecksum := hex.EncodeToString(hasher.Sum(nil))
 
 	if computedChecksum != expectedChecksum {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Invalid checksum value"})
+		c.AbortWithError(http.StatusBadRequest, errors.New("invalid checksum value"))
 		return
 	}
 
 	if err := c.SaveUploadedFile(file, fmt.Sprintf("./uploads/temp/%v_%v", metadata.Order, metadata.FileId)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload chunk file"})
+		c.AbortWithError(http.StatusInternalServerError, errors.New("failed to upload chunk file"))
 		return
 	}
 
 	if metadata.FileSize == metadata.Limit {
 		chunks, err := filepath.Glob(filepath.Join("./uploads/temp", fmt.Sprintf("*_%s", metadata.FileId)))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed finding chunk file"})
+			c.AbortWithError(http.StatusInternalServerError, errors.New("failed to finding chunk file"))
 			return
 		}
 
@@ -101,10 +102,12 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 			return orderI < orderJ
 		})
 
-		finalPath := filepath.Join("./uploads", metadata.FileName)
+		originalPath := filepath.Join("./uploads", metadata.FileName)
+		finalPath := utils.GetUniqueFilePath(originalPath)
+
 		finalFile, err := os.Create(finalPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed creating final file"})
+			c.AbortWithError(http.StatusInternalServerError, errors.New("failed creating chunk file"))
 			return
 		}
 		defer finalFile.Close()
@@ -112,7 +115,7 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 		for _, chunk := range chunks {
 			chunkFile, err := os.Open(chunk)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				c.AbortWithError(http.StatusInternalServerError, errors.New(err.Error()))
 				return
 			}
 
@@ -120,7 +123,7 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 			chunkFile.Close()
 
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				c.AbortWithError(http.StatusInternalServerError, errors.New(err.Error()))
 				return
 			}
 		}
@@ -130,32 +133,34 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 		}
 
 		// virus scanning
-		isClean, err := utils.ScanFileWithClamav(finalPath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed scanning file with clamav: " + err.Error()})
-			return
-		}
-
-		if !isClean {
-			if err := os.Remove(finalPath); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove file from storage"})
+		if os.Getenv("ENABLE_CLAMAV_SCAN") == "true" {
+			isClean, err := utils.ScanFileWithClamav(finalPath)
+			if err != nil {
+				c.AbortWithError(http.StatusInternalServerError, errors.New("failed scanning file with clamav: "+err.Error()))
 				return
 			}
 
-			c.JSON(http.StatusConflict, gin.H{"error": "File is infected"})
-			return
+			if !isClean {
+				if err := os.Remove(finalPath); err != nil {
+					c.AbortWithError(http.StatusInternalServerError, errors.New("failed to remove file from storage"))
+					return
+				}
+
+				c.AbortWithError(http.StatusConflict, errors.New("file is infected"))
+				return
+			}
 		}
 
 		finalFile, err = os.Open(finalPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed reopening final file: " + err.Error()})
+			c.AbortWithError(http.StatusInternalServerError, errors.New("failed reopening final file: "+err.Error()))
 			return
 		}
 		defer finalFile.Close()
 
 		mimeValue, err := utils.GetMimeType(finalFile)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.AbortWithError(http.StatusInternalServerError, errors.New(err.Error()))
 			return
 		}
 
@@ -169,13 +174,13 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 		}
 
 		if !isValidated {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type"})
+			c.AbortWithError(http.StatusBadRequest, errors.New("invalid mimetype"))
 			return
 		}
 
 		err = h.Repo.CreateFile(finalPath, userId, metadata.FileName, metadata.FileSize, mimeValue)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.AbortWithError(http.StatusInternalServerError, errors.New(err.Error()))
 			return
 		}
 
