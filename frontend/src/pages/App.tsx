@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "../components/ui/button"
-import { Image, Github, X, Download, Play, Pause, FileText, Trash } from "lucide-react"
+import { Image, Github, X, Play, Pause, FileText, LogOut } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import FileUploader from "../components/ui/file-uploader"
 import { v4 as uuidv4 } from "uuid"
-import { useNavigate } from "react-router"
+import { useNavigate, Link } from "react-router"
 import { isTokenValid, formatFileSize, generateChecksum, customFetch } from "@/lib/utils"
+import { fileMetadataSchema, fileResponseSchema, fileSchema } from "@/schema/schema"
+import { z } from "zod"
+import FileItems from "@/components/ui/file-items"
+import { useToast } from "@/hooks/use-toast"
+
+export type FileList = z.infer<typeof fileSchema>
 
 function App() {
   const navigate = useNavigate()
+  const { toast } = useToast()
 
   let controller, signal
   const CHUNK_SIZE = 512 * 1000 //500kb
@@ -18,6 +25,9 @@ function App() {
   const [uploadCount, setUploadCount] = useState(0)
   const [isSuccess, setIsSuccess] = useState(false)
 
+  const [fileList, setFileList] = useState<FileList[]>([])
+  const [isFetching, setIsFetching] = useState(true)
+
   // file state
   const fullChunks = useMemo(() => {
     if (!file) return 0
@@ -26,7 +36,6 @@ function App() {
 
     return Math.floor(file.size / CHUNK_SIZE)
   }, [file])
-  console.log("🚀 ~ fullChunks ~ fullChunks:", fullChunks)
 
   const remainedChunk = useMemo(() => {
     if (!file) return 0
@@ -53,7 +62,6 @@ function App() {
 
       if (fullChunks > 0 && file) {
         while (localUpdateCount < fullChunks && retryCount > 0) {
-          console.log("🚀 ~ handleResumeUpload ~ localUpdateCount:", localUpdateCount)
           const data = new FormData()
           const offset = CHUNK_SIZE * localUpdateCount
           const limit = CHUNK_SIZE * (localUpdateCount + 1)
@@ -78,7 +86,6 @@ function App() {
             body: data,
             signal,
           })
-          console.log("🚀 ~ handleResumeUpload ~ response:", response)
 
           if (response.status === 201) {
             setUploadCount(prev => prev + 1)
@@ -108,6 +115,11 @@ function App() {
             checkSum,
           }
 
+          const metadataValidation = fileMetadataSchema.safeParse(metadata)
+          if (!metadataValidation.success) {
+            return
+          }
+
           data.append("file", chunkedFile)
           data.append("metadata", JSON.stringify(metadata))
 
@@ -118,7 +130,9 @@ function App() {
 
           if (response.status === 201) {
             setIsSuccess(true)
+            fetchData()
           } else if (response.status === 422) {
+            // retry for error recovery
             while (retryCount > 0) {
               const retryResponse = await customFetch("/api/file/upload-chunk", {
                 method: "POST",
@@ -138,6 +152,10 @@ function App() {
       }
     } catch (error) {
       console.log("🚀 ~ handleClickUpload ~ error:", error)
+      toast({
+        variant: "destructive",
+        title: "Uh oh! Something went wrong.",
+      })
     }
   }
 
@@ -152,13 +170,91 @@ function App() {
     setIsSuccess(false)
   }
 
+  const handleClickDownload = async (id: number) => {
+    try {
+      const response = await customFetch(`/api/file/download/${id}`, {
+        method: "GET",
+      })
+
+      if (response.status === 200) {
+        // Convert response into a blob
+        const blob = await response.blob()
+
+        // Create a download link
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+
+        const contentDisposition = response.headers.get("Content-Disposition")
+        let filename = "downloaded_file"
+        if (contentDisposition) {
+          const match = contentDisposition.match(/filename="?([^"]+)"?/)
+          console.log("🚀 ~ handleClickDownload ~ match:", match)
+          if (match) {
+            filename = match[1]
+          }
+        }
+
+        a.download = filename // Set the filename
+        document.body.appendChild(a)
+        a.click() // Trigger download
+        document.body.removeChild(a)
+
+        window.URL.revokeObjectURL(url)
+        toast({
+          title: "File downloaded!",
+        })
+      }
+    } catch (error) {
+      console.log("🚀 ~ handleClickDelete ~ error:", error)
+    }
+  }
+
+  const handleClickDelete = async (id: number) => {
+    try {
+      const response = await customFetch(`/api/file/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.status === 200) {
+        fetchData()
+        toast({
+          title: "File deleted",
+        })
+      }
+    } catch (error) {
+      console.log("🚀 ~ handleClickDelete ~ error:", error)
+    }
+  }
+
   const fetchData = async () => {
     try {
+      setIsFetching(true)
       const response = await customFetch("/api/file")
-      console.log("🚀 ~ fetchData ~ response:", response)
+      if (response.status === 200) {
+        const parsedData = await response.json()
+
+        const responseValidation = fileResponseSchema.safeParse(parsedData.data)
+        if (!responseValidation.success) {
+          toast({
+            variant: "destructive",
+            title: "Uh oh! Validation failed.",
+          })
+          return
+        }
+
+        setFileList(parsedData.data)
+      }
     } catch (error) {
       console.log("🚀 ~ fetchData ~ error:", error)
+    } finally {
+      setIsFetching(false)
     }
+  }
+
+  const handleClickLogout = () => {
+    localStorage.removeItem("ACCESS_TOKEN")
+    navigate("/auth")
   }
 
   useEffect(() => {
@@ -176,9 +272,9 @@ function App() {
       <div className="w-full bg-[#dcff4e] flex items-center justify-center py-1">
         <p className="text-xs text-gray-600">Made with Love by Ramadhana Bagus Solichuddin</p>
       </div>
-      <div className="max-w-[1440px] px-16 py-8 mx-auto flex flex-col gap-8">
+      <div className="max-w-[1440px] p-4 md:px-16 md:py-8 mx-auto flex flex-col gap-8">
         {/* Top Section */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between">
           <div className="flex flex-col gap-2">
             <h1 className="text-4xl text-gray-700 font-bold">Secure File Management</h1>
             <p className="text-sm text-gray-700">
@@ -186,10 +282,27 @@ function App() {
             </p>
           </div>
 
-          <Button aria-label="View project on GitHub">
-            <Github aria-hidden="true" />
-            Github
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="https://github.com/ramadhanabs/go-secure-file-management"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button aria-label="View project on GitHub" className="w-max">
+                <Github aria-hidden="true" />
+                Github
+              </Button>
+            </Link>
+            <Button
+              aria-label="View project on GitHub"
+              variant="outline"
+              className="w-max"
+              onClick={handleClickLogout}
+            >
+              <LogOut />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* File Uploader */}
@@ -228,24 +341,28 @@ function App() {
                     {Math.floor((uploadCount / fullChunks) * 100)}%
                   </p>
 
-                  {isUploading ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Pause Upload"
-                      onClick={handlePauseUpload}
-                    >
-                      <Pause />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Resume Upload"
-                      onClick={handleResumeUpload}
-                    >
-                      <Play />
-                    </Button>
+                  {!isSuccess && (
+                    <>
+                      {isUploading ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Pause Upload"
+                          onClick={handlePauseUpload}
+                        >
+                          <Pause />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Resume Upload"
+                          onClick={handleResumeUpload}
+                        >
+                          <Play />
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -270,45 +387,12 @@ function App() {
           </p>
         </div>
 
-        <div
-          className="p-4 rounded-lg bg-[#fafafa] border border-gray-200 flex flex-col gap-4"
-          role="region"
-          aria-labelledby="uploaded-files-title"
-        >
-          <h2 id="uploaded-files-title" className="sr-only">
-            Uploaded Files
-          </h2>
-
-          <div className="flex gap-4 bg-white p-4 rounded-lg border border-gray-100">
-            <div className="p-2 border border-gray-300 rounded-lg w-max h-max">
-              <Image className="text-gray-600" />
-            </div>
-
-            <div className="flex items-center justify-between w-full">
-              <div className="flex flex-col gap-1">
-                <p className="font-semibold text-xs text-gray-600">Test Image Name.png</p>
-                <p className="text-xs text-gray-600">10MB</p>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex flex-col gap-1">
-                  <p className="font-semibold text-xs text-gray-600">Date Uploaded</p>
-                  <p className="text-xs text-gray-600">Jan 6, 2025</p>
-                </div>
-
-                <Button variant="outline" aria-label="Download Test Image Name.png">
-                  <Download aria-hidden="true" />
-                  Download
-                </Button>
-
-                <Button variant="destructive" aria-label="Download Test Image Name.png">
-                  <Trash aria-hidden="true" />
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <FileItems
+          data={fileList}
+          isFetching={isFetching}
+          handleClickDelete={handleClickDelete}
+          handleClickDownload={handleClickDownload}
+        />
       </div>
     </div>
   )

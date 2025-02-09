@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"go-secure-file-management/models"
 	"go-secure-file-management/repositories"
 	"go-secure-file-management/utils"
 	"io"
@@ -37,6 +36,14 @@ type Metadata struct {
 	FileSize int    `json:"fileSize"`
 	FileName string `json:"fileName"`
 	CheckSum string `json:"checkSum"`
+}
+
+type GetFilesResponse struct {
+	ID        int    `json:"id"`
+	Filename  string `json:"filename"`
+	MimeType  string `json:"mime_type"`
+	Size      int    `json:"size"`
+	CreatedAt string `json:"created_at"`
 }
 
 func (h *FileHandler) CreateFile(c *gin.Context) {
@@ -122,6 +129,23 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 			os.Remove(chunk)
 		}
 
+		// virus scanning
+		isClean, err := utils.ScanFileWithClamav(finalPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed scanning file with clamav: " + err.Error()})
+			return
+		}
+
+		if !isClean {
+			if err := os.Remove(finalPath); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove file from storage"})
+				return
+			}
+
+			c.JSON(http.StatusConflict, gin.H{"error": "File is infected"})
+			return
+		}
+
 		finalFile, err = os.Open(finalPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed reopening final file: " + err.Error()})
@@ -132,6 +156,20 @@ func (h *FileHandler) CreateFile(c *gin.Context) {
 		mimeValue, err := utils.GetMimeType(finalFile)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// validate actual mimetype
+		isValidated := false
+		allowedTypes := []string{"image/png", "image/jpeg", "application/pdf"}
+		for _, allowed := range allowedTypes {
+			if mimeValue == allowed {
+				isValidated = true
+			}
+		}
+
+		if !isValidated {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type"})
 			return
 		}
 
@@ -175,7 +213,6 @@ func (h *FileHandler) GetFileMetadata(c *gin.Context) {
 }
 
 func (h *FileHandler) GetFiles(c *gin.Context) {
-	baseURL := os.Getenv("BASE_URL")
 	userId := c.GetUint("userId")
 
 	files, err := h.Repo.GetFilesByUserId(userId)
@@ -183,15 +220,13 @@ func (h *FileHandler) GetFiles(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
-	response := make([]models.Files, 0)
+	response := make([]GetFilesResponse, 0)
 	for _, file := range files {
-		response = append(response, models.Files{
+		response = append(response, GetFilesResponse{
 			ID:        file.ID,
-			UserId:    file.UserId,
 			Filename:  file.Filename,
 			MimeType:  file.MimeType,
 			Size:      file.Size,
-			Path:      fmt.Sprintf("%s/%s", baseURL, file.Path),
 			CreatedAt: file.CreatedAt,
 		})
 	}
@@ -215,6 +250,19 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 		return
 	}
 
+	file, err := h.Repo.GetFileById(parsedFileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	filePath := "./" + file.Path
+
+	if err := os.Remove(filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove file from storage"})
+		return
+	}
+
 	err = h.Repo.DeleteFile(parsedFileId, userId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file"})
@@ -224,4 +272,31 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Success delete file",
 	})
+}
+
+func (h *FileHandler) DownloadFile(c *gin.Context) {
+	fileId := c.Param("fileId")
+
+	parsedFileId, err := strconv.Atoi(fileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse activity id"})
+		return
+	}
+
+	file, err := h.Repo.GetFileById(parsedFileId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	filePath := "./" + file.Path
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, file.Filename))
+	c.Header("Content-Type", "application/octet-stream")
+
+	c.File(filePath)
 }

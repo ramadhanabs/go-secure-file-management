@@ -36,9 +36,8 @@ const FileUploader = ({
       if (uploadedFile) {
         setFile(uploadedFile)
 
-        // Generate image preview if it's an image
         if (uploadedFile.type.startsWith("image/")) {
-          const previewUrl = URL.createObjectURL(uploadedFile)
+          const previewUrl = URL.createObjectURL(uploadedFile) // no need to sanitize unless we're rendering image by innerHTML
           setPreview(previewUrl)
         } else {
           setPreview(null) // No preview for PDFs
@@ -67,16 +66,16 @@ const FileUploader = ({
 
   if (file) {
     return (
-      <div className="border-dashed border-2 p-10 rounded-lg w-full flex flex-col items-center justify-center">
+      <div className="border-dashed border-2 p-4 md:p-10 rounded-lg w-full flex flex-col items-center justify-center">
         <div className="mt-4 text-center flex flex-col gap-2">
           {preview ? (
-            <div className="flex flex-col gap-1 p-2 max-w-[400px] border border-gray-200 items-center rounded-lg">
-              <img src={preview} alt="Preview" className="mt-2 max-w-xs rounded-md" />
+            <div className="flex flex-col gap-1 p-2 md:max-w-[400px] border border-gray-200 items-center rounded-lg">
+              <img src={preview} alt="Preview" className="mt-2 md:max-w-xs rounded-md" />
               <p className="text-sm text-gray-700 font-semibold">{file.name}</p>
               <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-1 p-2 max-w-[400px] border border-gray-200 items-center rounded-lg">
+            <div className="flex flex-col gap-1 p-2 md:max-w-[400px] border border-gray-200 items-center rounded-lg">
               <div className="bg-[#fafafa] p-2 rounded-lg border border-gray-100 w-max">
                 <FileText />
               </div>

@@ -28,7 +28,7 @@ func (r *FileRepository) CreateFile(path string, userId uint, filename string, s
 }
 
 func (r *FileRepository) DeleteFile(id int, userId uint) error {
-	query := "DELETE FROM files WHERE id = ? AND id = ?"
+	query := "DELETE FROM files WHERE id = ? AND user_id = ?"
 	_, err := db.DB.Exec(query, id, userId)
 
 	if err != nil {
@@ -56,7 +56,7 @@ func (r *FileRepository) GetFileById(id int) (models.Files, error) {
 }
 
 func (r *FileRepository) GetFilesByUserId(userId uint) ([]models.Files, error) {
-	query := "SELECT * FROM files WHERE user_id = ?"
+	query := "SELECT * FROM files WHERE user_id = ? ORDER BY created_at DESC"
 	rows, err := db.DB.Query(query, userId)
 	if err != nil {
 		return nil, err

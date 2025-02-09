@@ -4,8 +4,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useState } from "react"
 import { useNavigate } from "react-router"
+import { authRequestSchema, authResponseSchema } from "@/schema/schema"
+import { useToast } from "@/hooks/use-toast"
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
+  const { toast } = useToast()
   const navigate = useNavigate()
   const [mode, setMode] = useState<"login" | "signup">("login")
   const [loading, setLoading] = useState(false)
@@ -20,24 +23,44 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
-    const url =
-      mode === "login" ? "/api/login" : "/api/register"
+    const url = mode === "login" ? "/api/login" : "/api/register"
 
     try {
+      const payload = {
+        email,
+        password,
+      }
+
+      const requestValidation = authRequestSchema.safeParse(payload)
+      if (!requestValidation.success) return
+
       const response = await customFetch(url, {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || "Something went wrong")
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+        })
+        return
+      }
+
+      const responseValidation = authResponseSchema.safeParse(data)
+      if (!responseValidation.success) {
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Validation failed.",
+        })
+        return
       }
 
       localStorage.setItem("ACCESS_TOKEN", data.token)
 
-      navigate("/");
+      navigate("/")
     } catch (err: any) {
       setError(err.message)
     } finally {
