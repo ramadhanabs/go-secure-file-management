@@ -62,6 +62,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
       navigate("/")
     } catch (err: any) {
+      console.log("🚀 ~ handleSubmit ~ err:", err.message)
       setError(err.message)
     } finally {
       setLoading(false)

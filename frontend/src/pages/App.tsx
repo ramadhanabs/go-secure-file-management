@@ -12,13 +12,13 @@ import FileItems from "@/components/ui/file-items"
 import { useToast } from "@/hooks/use-toast"
 
 export type FileList = z.infer<typeof fileSchema>
+const CHUNK_SIZE = 50 * 1000 //500kb
 
 function App() {
   const navigate = useNavigate()
   const { toast } = useToast()
 
   let controller, signal
-  const CHUNK_SIZE = 512 * 1000 //500kb
 
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -151,11 +151,16 @@ function App() {
         }
       }
     } catch (error) {
-      console.log("🚀 ~ handleClickUpload ~ error:", error)
-      toast({
-        variant: "destructive",
-        title: "Uh oh! Something went wrong.",
-      })
+      if (error instanceof Error) {
+        console.log("🚀 ~ handleResumeUpload ~ error:", error.name)
+        toast({
+          variant: "destructive",
+          title: "Uh oh! Something went wrong.",
+          description: error.message,
+        })
+      } else {
+        console.error("An unknown error occurred")
+      }
     }
   }
 
