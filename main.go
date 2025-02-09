@@ -2,6 +2,7 @@ package main
 
 import (
 	"go-secure-file-management/db"
+	"go-secure-file-management/middleware"
 	"go-secure-file-management/routes"
 	"log"
 
@@ -14,6 +15,8 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
+
+	go middleware.ResetRateLimit()
 
 	db.Init("./my_db.db")
 	defer db.DB.Close()
