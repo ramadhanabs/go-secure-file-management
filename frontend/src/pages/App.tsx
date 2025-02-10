@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "../components/ui/button"
-import { Image, Github, X, Play, Pause, FileText, LogOut } from "lucide-react"
+import { Image, Github, X, FileText, LogOut } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import FileUploader from "../components/ui/file-uploader"
 import { v4 as uuidv4 } from "uuid"
@@ -164,9 +164,9 @@ function App() {
     }
   }
 
-  const handlePauseUpload = () => {
-    setIsUploading(false)
-  }
+  // const handlePauseUpload = () => {
+  //   setIsUploading(false)
+  // }
 
   const handleCancelUpload = () => {
     setFile(null)
@@ -346,7 +346,7 @@ function App() {
                     {Math.floor((uploadCount / fullChunks) * 100)}%
                   </p>
 
-                  {!isSuccess && (
+                  {/* {!isSuccess && (
                     <>
                       {isUploading ? (
                         <Button
@@ -368,7 +368,7 @@ function App() {
                         </Button>
                       )}
                     </>
-                  )}
+                  )} */}
                 </div>
               </div>
             </div>
@@ -378,6 +378,7 @@ function App() {
               size="icon"
               className="absolute right-4 top-4"
               aria-label="Cancel file upload"
+              onClick={handleCancelUpload}
             >
               <X />
             </Button>
