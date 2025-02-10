@@ -77,6 +77,7 @@ POST /api/login
 ```
 **Body:** _(Same as register)_
 
+### **File Management**
 #### **Get List of Files**
 ```http
 GET /api/file
