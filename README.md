@@ -183,7 +183,6 @@ echo "Deployment React app completed"
 
 5. **Authentication & Token Security**
    - Uses **JWT** -> needs some improvement by implementing short age and invalidating previous JWT token.
-   - Secure storage: Tokens are stored in **HTTP-only** cookies or memory (not `localStorage`).
 
 ### **Server-Side Security Recommendations**
 1. **Rate Limiting**
