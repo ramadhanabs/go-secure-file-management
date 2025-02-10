@@ -229,10 +229,10 @@ echo "Deployment React app completed"
 
 # Appendix
 ## Lighthouse Report
-![Lighthouse Report](https://asset.cloudinary.com/dzu79mrdy/2b696994bdda5841daf4e8db637b0ceb)
+![Lighthouse Report](https://res.cloudinary.com/dzu79mrdy/image/upload/v1739150353/Screenshot_2025-02-09_at_22.35.12_jbp4ky.png)
 
 ## HTTP Observatory Report
-![Lighthouse Report](https://asset.cloudinary.com/dzu79mrdy/226f10387accd14f4916ba1b1aab4b0e)
+![HTTP Observatory Report](https://res.cloudinary.com/dzu79mrdy/image/upload/v1739150547/Screenshot_2025-02-09_at_23.27.04_awr8fp.png)
 
 ## License
 MIT License
