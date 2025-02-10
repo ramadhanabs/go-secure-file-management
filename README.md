@@ -254,6 +254,14 @@ echo "Deployment React app completed"
 ## HTTP Observatory Report
 ![HTTP Observatory Report](https://res.cloudinary.com/dzu79mrdy/image/upload/v1739150547/Screenshot_2025-02-09_at_23.27.04_awr8fp.png)
 
+## ENV Examples
+```
+BASE_URL=http://localhost:8080
+CLIENT_URL=http://localhost:5173
+ENABLE_CLAMAV_SCAN=false
+APP_NAME=go_secure_file_management
+```
+
 ## License
 MIT License
 
