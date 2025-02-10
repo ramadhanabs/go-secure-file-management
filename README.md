@@ -77,19 +77,39 @@ POST /api/login
 ```
 **Body:** _(Same as register)_
 
-### **File Upload (Chunked Upload)**
-#### Upload Chunk
+#### **Get List of Files**
+```http
+GET /api/file
+```
+**Authentication:** Bearer Token Required ✅
+
+#### **Upload Chunk**
 ```http
 POST /api/upload-chunk
 ```
+**Authentication:** Bearer Token Required ✅
+
 **Form Data:**
 - `file`: Chunked file part
 - `metadata`: JSON string containing `{ fileId, offset, limit, fileSize, fileName, checkSum }`
 
-#### Download File
+#### **Download File**
 ```http
 GET /api/file/download/:id
 ```
+**Authentication:** Bearer Token Required ✅
+
+#### **Get File Metadata**
+```http
+GET /api/file/metadata/:fileId
+```
+**Authentication:** Bearer Token Required ✅
+
+#### **Delete File**
+```http
+DELETE /api/file/:fileId
+```
+**Authentication:** Bearer Token Required ✅
 
 ## Deployment
 ### **Backend on Ubuntu VPS**
